@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored agent skills and generated Supabase types
+    ".agents/**",
+    "lib/supabase/database.types.ts",
   ]),
 ]);
 
