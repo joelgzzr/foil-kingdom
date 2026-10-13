@@ -1,0 +1,1 @@
+{"nodes": [{"id": "$graphify-root$_supabase_migrations_20261013100000_drop_print_embeddings_sql", "label": "20261013100000_drop_print_embeddings.sql", "file_type": "code", "source_file": "supabase/migrations/20261013100000_drop_print_embeddings.sql", "source_location": null}], "edges": []}
