@@ -56,9 +56,7 @@ export async function createListingAction(input: unknown) {
       game_id: game.id,
       kind: "single",
       title,
-      description: listing.description || null,
       price_cents: priceToCents(listing.price),
-      accepts_offers: listing.acceptsOffers,
     })
     .select("id")
     .single();
@@ -110,9 +108,7 @@ export async function updateListingAction(id: unknown, input: unknown) {
     .from("listings")
     .update({
       title,
-      description: listing.description || null,
       price_cents: priceToCents(listing.price),
-      accepts_offers: listing.acceptsOffers,
     })
     .eq("id", existing.id)
     .eq("seller_id", user.id);

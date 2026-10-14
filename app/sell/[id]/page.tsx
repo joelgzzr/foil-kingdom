@@ -33,9 +33,7 @@ async function ManageListing({ params }: { params: PageProps<"/sell/[id]">["para
     language: item.language as ListingInput["language"],
     finish: item.finish as ListingInput["finish"],
     quantity: item.quantity,
-    description: listing.description ?? "",
     price: listing.price_cents / 100,
-    acceptsOffers: listing.accepts_offers,
   };
 
   return (

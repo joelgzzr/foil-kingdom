@@ -26,7 +26,6 @@ export async function createListingsFromScanAction(input: unknown) {
       finish: item.finish,
       quantity: item.quantity,
       price_cents: priceToCents(item.price),
-      accepts_offers: item.acceptsOffers,
     })),
   });
   if (error?.code === "54000") return fail(es.errors.rateLimited, "conflict");

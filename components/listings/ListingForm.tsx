@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
-import { Textarea } from "@/components/ui/textarea";
 import { createListingAction, updateListingAction } from "@/lib/actions/listings";
 import { es } from "@/lib/i18n/es";
 import { CONDITIONS, FINISHES, LANGUAGES, listingSchema, type ListingInput } from "@/lib/schemas/listing";
@@ -29,9 +28,7 @@ const emptyListing = {
   language: "en",
   finish: "regular",
   quantity: 1,
-  description: "",
   price: 0,
-  acceptsOffers: true,
 } satisfies ListingInput;
 
 export default function ListingForm({ listingId, defaultValues }: Props) {
@@ -125,15 +122,6 @@ export default function ListingForm({ listingId, defaultValues }: Props) {
           <Input id="quantity" type="number" inputMode="numeric" min={1} max={999} {...register("quantity", { valueAsNumber: true })} />
         </Field>
       </div>
-
-      <Field id="description" label={es.listing.description} error={errors.description?.message}>
-        <Textarea id="description" maxLength={2000} {...register("description")} />
-      </Field>
-
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" className="size-4 accent-primary" {...register("acceptsOffers")} />
-        {es.listing.acceptsOffers}
-      </label>
 
       <Button type="submit" disabled={isSubmitting}>
         {es.listing.save}

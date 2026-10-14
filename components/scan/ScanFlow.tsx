@@ -156,7 +156,7 @@ export default function ScanFlow({ phoneVerified, listedPrintIds }: { phoneVerif
     setSubmitting(true);
     const corrected = included.filter((card) => optionOf(card)?.code !== card.suggestedCode).length;
     const result = await createListingsFromScanAction({
-      items: finalItems.map((item) => ({ ...item, acceptsOffers: true })),
+      items: finalItems,
       publish: publish && phoneVerified,
       corrected,
     });

@@ -19,10 +19,8 @@ export const listingSchema = z
     finish: z.enum(FINISHES),
     // Copies in stock.
     quantity: z.number(es.errors.required).int(es.errors.required).min(1, es.listing.errors.stockRange).max(999, es.listing.errors.stockRange),
-    description: z.string().trim().max(2000, es.errors.tooLong),
     // Per copy, entered in pesos; stored as integer centavos.
     price: z.number(es.errors.required),
-    acceptsOffers: z.boolean(),
   })
   .superRefine((value, ctx) => {
     if (!Number.isFinite(value.price) || value.price < 1 || value.price > 1_000_000) {

@@ -14,7 +14,6 @@ export const scanItemSchema = z.object({
   quantity: z.number().int().min(1, es.listing.errors.stockRange).max(999, es.listing.errors.stockRange),
   // Per copy, in pesos; stored as integer centavos.
   price: z.number(es.errors.required).min(1, es.listing.errors.priceRange).max(1_000_000, es.listing.errors.priceRange),
-  acceptsOffers: z.boolean(),
 });
 
 export const scanListingsSchema = z.object({
