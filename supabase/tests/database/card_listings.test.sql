@@ -53,10 +53,11 @@ select throws_ok(
 reset role;
 
 -- Alice creates orders as the seller
+update public.conversations set agreed_bundle_cents = 5000 where id = '00000000-0000-0000-0000-00000000f001';
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
 set local role authenticated;
 select lives_ok(
-  $$select public.create_order('00000000-0000-0000-0000-00000000f001', 5000, 'envelope', '00000000-0000-0000-0000-00000000a001')$$,
+  $$select public.create_order('00000000-0000-0000-0000-00000000f001', 'envelope', '00000000-0000-0000-0000-00000000a001')$$,
   'creating an order reserves stock'
 );
 reset role;
@@ -67,7 +68,7 @@ select is((select status::text from public.listings where id = '00000000-0000-00
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
 set local role authenticated;
 select lives_ok(
-  $$select public.cancel_order((select id from public.orders limit 1))$$,
+  $$select public.cancel_order((select id from public.orders limit 1), 'Precio mal capturado')$$,
   'the seller can cancel the order'
 );
 reset role;
@@ -79,10 +80,11 @@ set local role authenticated;
 select lives_ok($$select public.set_conversation_item_quantity('00000000-0000-0000-0000-00000000f101', 2)$$, 'a buyer can ask for all the copies');
 reset role;
 
+update public.conversations set agreed_bundle_cents = 9000 where id = '00000000-0000-0000-0000-00000000f001';
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
 set local role authenticated;
 select lives_ok(
-  $$select public.create_order('00000000-0000-0000-0000-00000000f001', 9000, 'envelope', '00000000-0000-0000-0000-00000000a001')$$,
+  $$select public.create_order('00000000-0000-0000-0000-00000000f001', 'envelope', '00000000-0000-0000-0000-00000000a001')$$,
   'an order can take all remaining stock'
 );
 reset role;
@@ -94,7 +96,7 @@ reset role;
 
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
 set local role authenticated;
-select lives_ok($$select public.cancel_order((select id from public.orders where status = 'awaiting_buyer' limit 1))$$, 'cancelling the last order');
+select lives_ok($$select public.cancel_order((select id from public.orders where status = 'awaiting_buyer' limit 1), 'Ya no la quiero')$$, 'cancelling the last order');
 reset role;
 select is((select status::text from public.listings where id = '00000000-0000-0000-0000-00000000e001'), 'active', 'cancelling reactivates a sold out listing');
 

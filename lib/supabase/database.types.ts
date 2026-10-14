@@ -209,14 +209,14 @@ isOneToOne: false
                   ]
                 },"conversation_items": {
                   Row: {
-                    "added_by": string | null,"agreed_price_cents": number | null,"conversation_id": string,"created_at": string,"id": string,"listing_id": string,"order_id": string | null,"quantity": number,"title": string
+                    "added_by": string | null,"agreed_price_cents": number | null,"conversation_id": string,"created_at": string,"id": string,"listing_id": string,"order_id": string | null,"quantity": number,"requested_quantity": number | null,"title": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "added_by"?: string | null,"agreed_price_cents"?: number | null,"conversation_id": string,"created_at"?: string,"id"?: string,"listing_id": string,"order_id"?: string | null,"quantity"?: number,"title": string
+                    "added_by"?: string | null,"agreed_price_cents"?: number | null,"conversation_id": string,"created_at"?: string,"id"?: string,"listing_id": string,"order_id"?: string | null,"quantity"?: number,"requested_quantity"?: number | null,"title": string
                   }
                   Update: {
-                    "added_by"?: string | null,"agreed_price_cents"?: number | null,"conversation_id"?: string,"created_at"?: string,"id"?: string,"listing_id"?: string,"order_id"?: string | null,"quantity"?: number,"title"?: string
+                    "added_by"?: string | null,"agreed_price_cents"?: number | null,"conversation_id"?: string,"created_at"?: string,"id"?: string,"listing_id"?: string,"order_id"?: string | null,"quantity"?: number,"requested_quantity"?: number | null,"title"?: string
                   }
                   Relationships: [
                     {
@@ -363,14 +363,14 @@ isOneToOne: false
                   ]
                 },"listings": {
                   Row: {
-                    "accepts_offers": boolean,"created_at": string,"description": string | null,"featured_at": string | null,"game_id": string,"id": string,"kind": Database["public"]['Enums']["listing_kind"],"price_cents": number,"published_at": string | null,"sealed_type": string | null,"seller_id": string,"set_id": string | null,"source": string,"status": Database["public"]['Enums']["listing_status"],"title": string,"updated_at": string
+                    "created_at": string,"featured_at": string | null,"game_id": string,"id": string,"kind": Database["public"]['Enums']["listing_kind"],"price_cents": number,"published_at": string | null,"sealed_type": string | null,"seller_id": string,"set_id": string | null,"source": string,"status": Database["public"]['Enums']["listing_status"],"title": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "accepts_offers"?: boolean,"created_at"?: string,"description"?: string | null,"featured_at"?: string | null,"game_id": string,"id"?: string,"kind": Database["public"]['Enums']["listing_kind"],"price_cents": number,"published_at"?: string | null,"sealed_type"?: string | null,"seller_id": string,"set_id"?: string | null,"source"?: string,"status"?: Database["public"]['Enums']["listing_status"],"title": string,"updated_at"?: string
+                    "created_at"?: string,"featured_at"?: string | null,"game_id": string,"id"?: string,"kind": Database["public"]['Enums']["listing_kind"],"price_cents": number,"published_at"?: string | null,"sealed_type"?: string | null,"seller_id": string,"set_id"?: string | null,"source"?: string,"status"?: Database["public"]['Enums']["listing_status"],"title": string,"updated_at"?: string
                   }
                   Update: {
-                    "accepts_offers"?: boolean,"created_at"?: string,"description"?: string | null,"featured_at"?: string | null,"game_id"?: string,"id"?: string,"kind"?: Database["public"]['Enums']["listing_kind"],"price_cents"?: number,"published_at"?: string | null,"sealed_type"?: string | null,"seller_id"?: string,"set_id"?: string | null,"source"?: string,"status"?: Database["public"]['Enums']["listing_status"],"title"?: string,"updated_at"?: string
+                    "created_at"?: string,"featured_at"?: string | null,"game_id"?: string,"id"?: string,"kind"?: Database["public"]['Enums']["listing_kind"],"price_cents"?: number,"published_at"?: string | null,"sealed_type"?: string | null,"seller_id"?: string,"set_id"?: string | null,"source"?: string,"status"?: Database["public"]['Enums']["listing_status"],"title"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -395,14 +395,14 @@ isOneToOne: false
                   ]
                 },"messages": {
                   Row: {
-                    "body": string | null,"conversation_id": string,"created_at": string,"id": string,"kind": string,"offer_cents": number | null,"offer_item_id": string | null,"offer_scope": string | null,"offer_status": string | null,"sender_id": string
+                    "body": string | null,"conversation_id": string,"created_at": string,"id": string,"kind": string,"note": string | null,"offer_cents": number | null,"offer_item_id": string | null,"offer_scope": string | null,"offer_status": string | null,"sender_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "body"?: string | null,"conversation_id": string,"created_at"?: string,"id"?: string,"kind"?: string,"offer_cents"?: number | null,"offer_item_id"?: string | null,"offer_scope"?: string | null,"offer_status"?: string | null,"sender_id": string
+                    "body"?: string | null,"conversation_id": string,"created_at"?: string,"id"?: string,"kind"?: string,"note"?: string | null,"offer_cents"?: number | null,"offer_item_id"?: string | null,"offer_scope"?: string | null,"offer_status"?: string | null,"sender_id": string
                   }
                   Update: {
-                    "body"?: string | null,"conversation_id"?: string,"created_at"?: string,"id"?: string,"kind"?: string,"offer_cents"?: number | null,"offer_item_id"?: string | null,"offer_scope"?: string | null,"offer_status"?: string | null,"sender_id"?: string
+                    "body"?: string | null,"conversation_id"?: string,"created_at"?: string,"id"?: string,"kind"?: string,"note"?: string | null,"offer_cents"?: number | null,"offer_item_id"?: string | null,"offer_scope"?: string | null,"offer_status"?: string | null,"sender_id"?: string
                   }
                   Relationships: [
                     {
@@ -525,19 +525,25 @@ isOneToOne: false
                   ]
                 },"orders": {
                   Row: {
-                    "buyer_id": string,"conversation_id": string,"created_at": string,"destination_summary": string | null,"height_cm": number,"id": string,"item_price_cents": number,"label_error": string | null,"length_cm": number,"listing_title": string,"origin_summary": string,"package_preset": string,"selected_quote_id": string | null,"seller_id": string,"status": Database["public"]['Enums']["order_status"],"total_cents": number | null,"updated_at": string,"weight_grams": number,"width_cm": number
+                    "buyer_id": string,"cancel_reason": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"conversation_id": string,"created_at": string,"destination_summary": string | null,"height_cm": number,"id": string,"item_price_cents": number,"label_error": string | null,"length_cm": number,"listing_title": string,"origin_summary": string,"package_preset": string,"selected_quote_id": string | null,"seller_id": string,"status": Database["public"]['Enums']["order_status"],"total_cents": number | null,"updated_at": string,"weight_grams": number,"width_cm": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "buyer_id": string,"conversation_id": string,"created_at"?: string,"destination_summary"?: string | null,"height_cm": number,"id"?: string,"item_price_cents": number,"label_error"?: string | null,"length_cm": number,"listing_title": string,"origin_summary": string,"package_preset": string,"selected_quote_id"?: string | null,"seller_id": string,"status"?: Database["public"]['Enums']["order_status"],"total_cents"?: number | null,"updated_at"?: string,"weight_grams": number,"width_cm": number
+                    "buyer_id": string,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"conversation_id": string,"created_at"?: string,"destination_summary"?: string | null,"height_cm": number,"id"?: string,"item_price_cents": number,"label_error"?: string | null,"length_cm": number,"listing_title": string,"origin_summary": string,"package_preset": string,"selected_quote_id"?: string | null,"seller_id": string,"status"?: Database["public"]['Enums']["order_status"],"total_cents"?: number | null,"updated_at"?: string,"weight_grams": number,"width_cm": number
                   }
                   Update: {
-                    "buyer_id"?: string,"conversation_id"?: string,"created_at"?: string,"destination_summary"?: string | null,"height_cm"?: number,"id"?: string,"item_price_cents"?: number,"label_error"?: string | null,"length_cm"?: number,"listing_title"?: string,"origin_summary"?: string,"package_preset"?: string,"selected_quote_id"?: string | null,"seller_id"?: string,"status"?: Database["public"]['Enums']["order_status"],"total_cents"?: number | null,"updated_at"?: string,"weight_grams"?: number,"width_cm"?: number
+                    "buyer_id"?: string,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"conversation_id"?: string,"created_at"?: string,"destination_summary"?: string | null,"height_cm"?: number,"id"?: string,"item_price_cents"?: number,"label_error"?: string | null,"length_cm"?: number,"listing_title"?: string,"origin_summary"?: string,"package_preset"?: string,"selected_quote_id"?: string | null,"seller_id"?: string,"status"?: Database["public"]['Enums']["order_status"],"total_cents"?: number | null,"updated_at"?: string,"weight_grams"?: number,"width_cm"?: number
                   }
                   Relationships: [
                     {
       foreignKeyName: "orders_buyer_id_fkey"
       columns: ["buyer_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_cancelled_by_fkey"
+      columns: ["cancelled_by"]
 isOneToOne: false
       referencedRelation: "profiles"
       referencedColumns: ["id"]
@@ -563,14 +569,14 @@ isOneToOne: false
                   ]
                 },"payments": {
                   Row: {
-                    "amount_cents": number,"created_at": string,"id": string,"order_id": string,"provider": string,"provider_payment_id": string | null,"status": string,"updated_at": string
+                    "amount_cents": number,"created_at": string,"id": string,"order_id": string,"provider": string,"provider_payment_id": string | null,"refund_needed": boolean,"status": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount_cents": number,"created_at"?: string,"id"?: string,"order_id": string,"provider": string,"provider_payment_id"?: string | null,"status"?: string,"updated_at"?: string
+                    "amount_cents": number,"created_at"?: string,"id"?: string,"order_id": string,"provider": string,"provider_payment_id"?: string | null,"refund_needed"?: boolean,"status"?: string,"updated_at"?: string
                   }
                   Update: {
-                    "amount_cents"?: number,"created_at"?: string,"id"?: string,"order_id"?: string,"provider"?: string,"provider_payment_id"?: string | null,"status"?: string,"updated_at"?: string
+                    "amount_cents"?: number,"created_at"?: string,"id"?: string,"order_id"?: string,"provider"?: string,"provider_payment_id"?: string | null,"refund_needed"?: boolean,"status"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -896,7 +902,7 @@ isOneToOne: false
                   ]
                 },"listing_search": {
                   Row: {
-                    "accepts_offers": boolean | null,"card_types": (string)[] | null,"colors": (string)[] | null,"conditions": (string)[] | null,"cover_image_path": string | null,"featured_at": string | null,"finishes": (string)[] | null,"id": string | null,"kind": Database["public"]['Enums']["listing_kind"] | null,"languages": (string)[] | null,"price_cents": number | null,"published_at": string | null,"rarities": (string)[] | null,"sealed_type": string | null,"search_text": string | null,"seller_id": string | null,"set_ids": (string)[] | null,"title": string | null,"total_copies": number | null
+                    "card_types": (string)[] | null,"colors": (string)[] | null,"conditions": (string)[] | null,"cover_image_path": string | null,"featured_at": string | null,"finishes": (string)[] | null,"id": string | null,"kind": Database["public"]['Enums']["listing_kind"] | null,"languages": (string)[] | null,"price_cents": number | null,"published_at": string | null,"rarities": (string)[] | null,"sealed_type": string | null,"search_text": string | null,"seller_id": string | null,"set_ids": (string)[] | null,"title": string | null,"total_copies": number | null
                   }
                   ComputedFields: never
                   Relationships: [
@@ -946,25 +952,34 @@ isOneToOne: false
           }
           Functions: {
             "add_conversation_items":
-{ Args: { "p_conversation_id": string,"p_listing_ids": (string)[] }; Returns: undefined
+{ Args: { "p_conversation_id": string,"p_listing_ids": (string)[],"p_quantities"?: (number)[] }; Returns: undefined
                            },
 "add_conversation_items_internal":
-{ Args: { "p_added_by": string,"p_conversation_id": string,"p_listing_ids": (string)[],"p_seller_id": string }; Returns: number
+{ Args: { "p_added_by": string,"p_conversation_id": string,"p_listing_ids": (string)[],"p_quantities"?: (number)[],"p_seller_id": string }; Returns: number
+                           },
+"admin_revoke_order":
+{ Args: { "p_order_id": string,"p_reason": string }; Returns: undefined
                            },
 "can_publish":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "cancel_order":
-{ Args: { "p_order_id": string }; Returns: undefined
+{ Args: { "p_order_id": string,"p_reason": string }; Returns: undefined
                            },
 "conversation_has_pending_order":
 { Args: { "p_conversation_id": string }; Returns: boolean
+                           },
+"conversation_offer_ceiling":
+{ Args: { "p_conversation_id": string }; Returns: number
+                           },
+"counter_offer":
+{ Args: { "p_amount_cents": number,"p_message_id": string }; Returns: string
                            },
 "create_listings_from_scan":
 { Args: { "p_items": Json }; Returns: string[]
                            },
 "create_order":
-{ Args: { "p_conversation_id": string,"p_item_price_cents": number,"p_origin_address_id": string,"p_package_preset": string }; Returns: string
+{ Args: { "p_conversation_id": string,"p_origin_address_id": string,"p_package_preset": string }; Returns: string
                            },
 "is_in_good_standing":
 { Args: Record<PropertyKey, never>; Returns: boolean
@@ -973,7 +988,7 @@ isOneToOne: false
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "make_offer":
-{ Args: { "p_amount_cents": number,"p_conversation_id": string,"p_item_id"?: string,"p_scope": string }; Returns: string
+{ Args: { "p_amount_cents"?: number,"p_conversation_id": string }; Returns: string
                            },
 "mark_conversation_read":
 { Args: { "p_conversation_id": string }; Returns: undefined
@@ -983,6 +998,9 @@ isOneToOne: false
                            },
 "merge_card_prints":
 { Args: { "p_stale": string,"p_target": string }; Returns: undefined
+                           },
+"order_payment_in_flight":
+{ Args: { "p_order_id": string }; Returns: boolean
                            },
 "orphaned_listing_photo_paths":
 { Args: { "p_older_than"?: string }; Returns: string[]
@@ -995,6 +1013,9 @@ isOneToOne: false
                            },
 "refresh_conversation_title":
 { Args: { "p_conversation_id": string }; Returns: undefined
+                           },
+"release_order_items":
+{ Args: { "p_order_id": string }; Returns: undefined
                            },
 "remove_conversation_item":
 { Args: { "p_item_id": string }; Returns: undefined
@@ -1027,13 +1048,16 @@ isOneToOne: false
 { Args: { "p_address_id": string,"p_order_id": string }; Returns: undefined
                            },
 "start_conversation":
-{ Args: { "p_listing_ids": (string)[] }; Returns: string
+{ Args: { "p_listing_ids": (string)[],"p_quantities"?: (number)[] }; Returns: string
                            },
 "submit_rating":
 { Args: { "p_comment": string,"p_order_id": string,"p_stars": number }; Returns: string
                            },
 "submit_report":
 { Args: { "p_details": string,"p_reason": string,"p_target_id": string,"p_target_type": string }; Returns: string
+                           },
+"trim_listing_in_other_conversations":
+{ Args: { "p_except_conversation": string,"p_listing_id": string,"p_remaining": number }; Returns: undefined
                            },
 "unban_user":
 { Args: { "p_user_id": string }; Returns: undefined
