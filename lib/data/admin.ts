@@ -59,3 +59,31 @@ export async function getLabelFailedOrders() {
   if (error) throw new Error("Failed to load orders");
   return data;
 }
+
+// Order reports point at orders the moderator is not a party to, so their summary comes from the admin client.
+export async function getReportedOrderSummaries(orderIds: string[]) {
+  if (orderIds.length === 0) return new Map<string, { status: string; buyer: string; seller: string; trackingNumber: string | null }>();
+  const { data, error } = await createAdminClient()
+    .from("orders")
+    .select(
+      "id, status, buyer:profiles!orders_buyer_id_fkey(username), seller:profiles!orders_seller_id_fkey(username), shipments(tracking_number)",
+    )
+    .in("id", orderIds);
+  if (error) throw new Error("Failed to load orders");
+  return new Map(
+    data.map((order) => [
+      order.id,
+      { status: order.status, buyer: order.buyer.username, seller: order.seller.username, trackingNumber: order.shipments?.tracking_number ?? null },
+    ]),
+  );
+}
+
+export async function getPendingRefunds() {
+  const { data, error } = await createAdminClient()
+    .from("payments")
+    .select("id, amount_cents, created_at, orders(listing_title)")
+    .eq("refund_needed", true)
+    .order("created_at", { ascending: true });
+  if (error) throw new Error("Failed to load refunds");
+  return data;
+}

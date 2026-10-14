@@ -7,19 +7,22 @@ import CatalogRecordActions from "@/components/admin/CatalogRecordActions";
 import ReportActions from "@/components/admin/ReportActions";
 import { Badge } from "@/components/ui/badge";
 import { requireModerator } from "@/lib/auth-guard";
-import { getBannedUsers, getLabelFailedOrders, getOpenReports, getUnmatchedCatalogRecords } from "@/lib/data/admin";
+import { getBannedUsers, getLabelFailedOrders, getOpenReports, getPendingRefunds, getReportedOrderSummaries, getUnmatchedCatalogRecords } from "@/lib/data/admin";
 import { es } from "@/lib/i18n/es";
+import { formatMXN } from "@/lib/money";
 
 export const metadata: Metadata = { title: es.admin.title, robots: { index: false } };
 
 async function AdminDashboard() {
   await requireModerator();
-  const [reports, banned, failedOrders, unmatched] = await Promise.all([
+  const [reports, banned, failedOrders, unmatched, refunds] = await Promise.all([
     getOpenReports(),
     getBannedUsers(),
     getLabelFailedOrders(),
     getUnmatchedCatalogRecords(),
+    getPendingRefunds(),
   ]);
+  const orderSummaries = await getReportedOrderSummaries(reports.filter((report) => report.target_type === "order").map((report) => report.target_id));
 
   return (
     <div className="grid gap-8">
@@ -28,28 +31,39 @@ async function AdminDashboard() {
           {es.admin.reports} ({reports.length})
         </h2>
         {reports.length === 0 ? <p className="text-sm text-muted-foreground">{es.admin.noReports}</p> : null}
-        {reports.map((report) => (
+        {reports.map((report) => {
+          const orderSummary = orderSummaries.get(report.target_id);
+          return (
           <article key={report.id} className="grid gap-2 rounded-xl border p-3 text-sm">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary">{es.admin.targets[report.target_type as "listing" | "user"]}</Badge>
+              <Badge variant="secondary">{es.admin.targets[report.target_type as "listing" | "user" | "order"]}</Badge>
               <Badge variant="outline">{es.trust.reports.reasons[report.reason as keyof typeof es.trust.reports.reasons]}</Badge>
               {report.target_type === "listing" ? (
                 <Link href={`/listings/${report.target_id}`} className="font-medium underline">
                   {report.target_label}
                 </Link>
+              ) : report.target_type === "order" ? (
+                <span className="font-medium">{report.target_label}</span>
               ) : (
                 <Link href={`/sellers/${report.target_label}`} className="font-medium underline">
                   @{report.target_label}
                 </Link>
               )}
             </div>
+            {orderSummary ? (
+              <p className="text-xs text-muted-foreground">
+                {es.orders.status[orderSummary.status as keyof typeof es.orders.status]} · @{orderSummary.buyer} → @{orderSummary.seller}
+                {orderSummary.trackingNumber ? ` · ${orderSummary.trackingNumber}` : ""}
+              </p>
+            ) : null}
             <p className="text-xs text-muted-foreground">
               {es.admin.reportedBy} @{report.reporter.username} · {new Date(report.created_at).toLocaleDateString("es-MX")}
             </p>
             {report.details ? <p className="whitespace-pre-line">{report.details}</p> : null}
-            <ReportActions reportId={report.id} canRemoveListing={report.target_type === "listing"} />
+            <ReportActions reportId={report.id} targetType={report.target_type as "listing" | "user" | "order"} />
           </article>
-        ))}
+          );
+        })}
       </section>
 
       <section aria-labelledby="admin-orders" className="grid gap-3">
@@ -65,6 +79,24 @@ async function AdminDashboard() {
                 <p className="truncate text-xs text-destructive">{order.label_error}</p>
               </div>
               <AdminRowButton kind="retry-label" id={order.id} />
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section aria-labelledby="admin-refunds" className="grid gap-3">
+        <h2 id="admin-refunds" className="font-medium">
+          {es.admin.refunds} ({refunds.length})
+        </h2>
+        {refunds.length === 0 ? <p className="text-sm text-muted-foreground">{es.admin.noRefunds}</p> : null}
+        <ul className="grid divide-y rounded-xl border empty:hidden">
+          {refunds.map((payment) => (
+            <li key={payment.id} className="flex flex-wrap items-center justify-between gap-3 p-3 text-sm">
+              <div className="min-w-0">
+                <p className="truncate font-medium">{payment.orders?.listing_title}</p>
+                <p className="truncate text-xs text-muted-foreground">{es.admin.refundAmount(formatMXN(payment.amount_cents))}</p>
+              </div>
+              <AdminRowButton kind="mark-refunded" id={payment.id} />
             </li>
           ))}
         </ul>

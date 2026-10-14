@@ -7,7 +7,8 @@ import { fail, ok } from "@/lib/action-result";
 import { requireModerator } from "@/lib/auth-guard";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { es } from "@/lib/i18n/es";
-import { retryLabelPurchase } from "@/lib/orders/process";
+import { retryLabelPurchase, revokeOrder } from "@/lib/orders/process";
+import { cancelOrderSchema } from "@/lib/schemas/order";
 import { resolveReportSchema } from "@/lib/schemas/trust";
 
 const idSchema = z.uuid();
@@ -91,4 +92,48 @@ export async function retryLabelAction(orderId: unknown) {
   revalidatePath("/admin");
   if (!result.retried) return fail(es.errors.generic, "conflict");
   return result.succeeded ? ok(undefined, es.admin.retryDone) : fail(es.admin.retryFailed);
+}
+
+// Cancels the reported order (void label, refund, restore stock) and closes the report.
+export async function revokeOrderAction(reportId: unknown, input: unknown) {
+  const { supabase } = await requireModerator();
+  const parsedId = idSchema.safeParse(reportId);
+  const parsed = cancelOrderSchema.safeParse(input);
+  if (!parsedId.success) return fail(es.errors.generic, "validation");
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? es.errors.generic, "validation");
+
+  const admin = createAdminClient();
+  const { data: report } = await admin
+    .from("reports")
+    .select("target_id")
+    .eq("id", parsedId.data)
+    .eq("target_type", "order")
+    .eq("status", "open")
+    .maybeSingle();
+  if (!report) return fail(es.errors.notFound, "not_found");
+
+  const result = await revokeOrder(supabase, report.target_id, parsed.data.reason);
+  if (!result.revoked) return fail(es.errors.generic, "conflict");
+
+  await supabase.rpc("resolve_report", { p_report_id: parsedId.data, p_action: "revoke_order", p_note: parsed.data.reason });
+  revalidatePath("/admin");
+  revalidatePath("/orders");
+  updateTag("listings");
+  return ok(undefined, result.manualFollowUp ? es.admin.revokedManual : es.admin.revoked);
+}
+
+export async function markRefundedAction(paymentId: unknown) {
+  await requireModerator();
+  const parsed = idSchema.safeParse(paymentId);
+  if (!parsed.success) return fail(es.errors.generic, "validation");
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("payments")
+    .update({ status: "refunded", refund_needed: false })
+    .eq("id", parsed.data)
+    .eq("refund_needed", true);
+  if (error) return fail(es.errors.generic);
+  revalidatePath("/admin");
+  return ok(undefined, es.admin.refundMarked);
 }

@@ -32,6 +32,35 @@ export async function getSellerProfile(username: string) {
   return { profile, ratings };
 }
 
+export type CartSellerInfo = {
+  username: string;
+  displayName: string | null;
+  state: string | null;
+  city: string | null;
+  ratingAvg: number | null;
+  ratingCount: number;
+};
+
+// Public seller info for the cart page. Banned sellers are omitted.
+export async function getCartSellers(usernames: string[]): Promise<CartSellerInfo[]> {
+  if (usernames.length === 0) return [];
+  const { data, error } = await createPublicClient()
+    .from("profiles")
+    .select("username, display_name, state, city, rating_avg, rating_count, banned_at")
+    .in("username", usernames);
+  if (error) throw new Error("Failed to load sellers");
+  return data
+    .filter((row) => !row.banned_at)
+    .map((row) => ({
+      username: row.username,
+      displayName: row.display_name,
+      state: row.state,
+      city: row.city,
+      ratingAvg: row.rating_avg,
+      ratingCount: row.rating_count,
+    }));
+}
+
 // Request-bound: delivered orders of this conversation that the user has not rated yet.
 export async function getPendingRatingOrderIds(conversationId: string, userId: string) {
   const supabase = await createClient();
