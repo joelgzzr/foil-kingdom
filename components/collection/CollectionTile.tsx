@@ -1,36 +1,49 @@
 "use client";
 
-import { useCollectionSelection } from "@/components/collection/CollectionSelection";
+import { Check, ShoppingCart } from "lucide-react";
+import Link from "next/link";
+
 import ListingTile from "@/components/listings/ListingTile";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cartItemFromTile, useSellerCart } from "@/lib/cart/use-cart";
 import type { ListingTileData } from "@/lib/data/listings";
 import { es } from "@/lib/i18n/es";
 
-// Listing tile with an optional selection checkbox, for buying several cards from one seller.
+// Listing tile with an optional add-to-cart button, for buying several cards from one seller.
 export default function CollectionTile({
   listing,
   selectable,
+  conversationId,
   priority = false,
 }: {
   listing: ListingTileData;
   selectable: boolean;
+  // Set when the viewer already negotiates this card, so it links there instead of the cart.
+  conversationId?: string;
   priority?: boolean;
 }) {
-  const { selected, toggle } = useCollectionSelection();
-  const isSelected = selected.has(listing.id);
+  const { has, add, remove } = useSellerCart(listing.sellerUsername);
+  const inCart = has(listing.id);
 
   return (
-    <div className={`relative rounded-xl ${isSelected ? "ring-2 ring-primary" : ""}`}>
+    <div className={`grid gap-1 rounded-xl ${inCart ? "ring-2 ring-primary" : ""}`}>
       <ListingTile listing={listing} priority={priority} />
-      {selectable ? (
-        <label className="absolute left-3 top-3 flex size-7 cursor-pointer items-center justify-center rounded-md bg-background/90 shadow">
-          <input
-            type="checkbox"
-            className="size-4"
-            checked={isSelected}
-            onChange={() => toggle(listing.id)}
-            aria-label={es.collection.select(listing.title)}
-          />
-        </label>
+      {selectable && conversationId ? (
+        <Link href={`/messages/${conversationId}`} className={`${buttonVariants({ size: "sm", variant: "secondary" })} mx-2 mb-2`}>
+          {es.cart.inConversation}
+        </Link>
+      ) : selectable ? (
+        <Button
+          type="button"
+          size="sm"
+          variant={inCart ? "secondary" : "outline"}
+          className="mx-2 mb-2"
+          aria-pressed={inCart}
+          onClick={() => (inCart ? remove(listing.id) : add(cartItemFromTile(listing)))}
+        >
+          {inCart ? <Check aria-hidden /> : <ShoppingCart aria-hidden />}
+          {inCart ? es.cart.inCart : es.cart.add}
+        </Button>
       ) : null}
     </div>
   );

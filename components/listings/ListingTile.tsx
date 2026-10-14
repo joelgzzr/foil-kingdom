@@ -9,7 +9,7 @@ import { formatMXN } from "@/lib/money";
 export default function ListingTile({ listing, priority = false }: { listing: ListingTileData; priority?: boolean }) {
   return (
     <Link
-      href={`/listings/${listing.id}`}
+      href={listing.printSlug ? `/cards/${encodeURIComponent(listing.printSlug)}#listing-${listing.id}` : `/listings/${listing.id}`}
       className="group flex flex-col gap-2 rounded-xl p-2 transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
     >
       <div className="relative aspect-[5/7] overflow-hidden rounded-lg bg-muted">

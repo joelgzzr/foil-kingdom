@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 
+import HeaderCart from "@/components/layout/HeaderCart";
 import HeaderSearch from "@/components/layout/HeaderSearch";
 import UserNav from "@/components/layout/UserNav";
 import { es } from "@/lib/i18n/es";
@@ -24,7 +25,8 @@ export default function SiteHeader() {
         <div className="order-last w-full md:order-none md:mx-auto md:max-w-md md:flex-1">
           <HeaderSearch />
         </div>
-        <div className="ml-auto md:ml-0">
+        <div className="ml-auto flex items-center gap-1 md:ml-0">
+          <HeaderCart />
           {/* Session read is request-time, so it streams in behind Suspense. */}
           <Suspense fallback={<div className="h-8 w-24" aria-hidden />}>
             <UserNav />

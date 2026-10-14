@@ -2,6 +2,6 @@ import type { MetadataRoute } from "next";
 
 export default function robots(): MetadataRoute.Robots {
   return {
-    rules: { userAgent: "*", disallow: ["/admin", "/account", "/messages", "/orders", "/pay", "/sell", "/wishlist", "/notifications", "/api"] },
+    rules: { userAgent: "*", disallow: ["/admin", "/account", "/messages", "/orders", "/pay", "/sell", "/wishlist", "/notifications", "/cart", "/api"] },
   };
 }

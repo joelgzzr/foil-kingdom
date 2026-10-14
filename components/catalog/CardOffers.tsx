@@ -1,8 +1,14 @@
+import Image from "next/image";
 import Link from "next/link";
+import { Suspense } from "react";
 
+import CardOfferAction from "@/components/catalog/CardOfferAction";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/native-select";
+import { avatarInitials } from "@/lib/avatar";
+import type { CartItem } from "@/lib/cart/store";
 import { getPrintListings, type CardOfferFilters } from "@/lib/data/listings";
 import { es } from "@/lib/i18n/es";
 import { formatMXN } from "@/lib/money";
@@ -72,43 +78,88 @@ export default async function CardOffers({ printId, cardPath: path, filters }: P
         </p>
       ) : (
         <ul className="grid divide-y rounded-xl border">
-          {offers.map((offer) => (
-            <li key={offer.listingId}>
-              <Link
-                href={`/listings/${offer.listingId}`}
-                className="flex flex-wrap items-center justify-between gap-3 p-3 hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+          {offers.map((offer) => {
+            const seller = offer.seller;
+            const location = [seller.city, seller.state].filter(Boolean).join(", ");
+            const item: CartItem = {
+              id: offer.listingId,
+              title: offer.title,
+              priceCents: offer.priceCents,
+              imageUrl: offer.photoUrls[0] ?? offer.cardImageUrl,
+              quantity: 1,
+              stock: offer.stock,
+              slug: offer.printSlug,
+            };
+            return (
+              <li
+                key={offer.listingId}
+                id={`listing-${offer.listingId}`}
+                className="grid scroll-mt-20 gap-3 p-3 target:bg-muted/60 sm:grid-cols-[1fr_auto] sm:items-center"
               >
-                <div className="grid gap-1">
-                  <p className="text-base font-semibold">{formatMXN(offer.priceCents)}</p>
-                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                <div className="grid gap-2">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <p className="text-base font-semibold">{formatMXN(offer.priceCents)}</p>
                     <Badge variant="secondary">
                       {es.listing.conditions[offer.condition as keyof typeof es.listing.conditions]}
                     </Badge>
-                    <span>{es.listing.languages[offer.language as keyof typeof es.listing.languages]}</span>
-                    <span>·</span>
-                    <span>{es.listing.finishes[offer.finish as keyof typeof es.listing.finishes]}</span>
-                    <span>·</span>
-                    <span>{es.catalog.stock(offer.stock)}</span>
-                    {offer.hasPhotos ? <span>· {es.listing.photos}</span> : null}
-                    {offer.acceptsOffers ? <span>· {es.listing.offersAccepted}</span> : null}
+                    <span className="text-xs text-muted-foreground">
+                      {[
+                        es.listing.languages[offer.language as keyof typeof es.listing.languages],
+                        es.listing.finishes[offer.finish as keyof typeof es.listing.finishes],
+                        es.catalog.stock(offer.stock),
+                      ].join(" · ")}
+                    </span>
                   </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Avatar>
+                      {seller.avatar_url ? <AvatarImage src={seller.avatar_url} alt="" /> : null}
+                      <AvatarFallback>{avatarInitials(seller.display_name, seller.username)}</AvatarFallback>
+                    </Avatar>
+                    <div className="grid">
+                      <Link href={`/sellers/${encodeURIComponent(seller.username)}`} className="font-medium hover:underline">
+                        {seller.display_name ?? seller.username}
+                      </Link>
+                      <span className="text-xs text-muted-foreground">
+                        {[
+                          seller.rating_count > 0
+                            ? es.trust.ratings.summary(Number(seller.rating_avg).toFixed(1), seller.rating_count)
+                            : es.trust.ratings.none,
+                          location,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    </div>
+                  </div>
+                  {offer.photoUrls.length > 0 ? (
+                    <ul className="flex gap-2">
+                      {offer.photoUrls.map((url, index) => (
+                        <li key={url}>
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="relative block aspect-[5/7] w-14 overflow-hidden rounded-md bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+                          >
+                            <Image
+                              src={url}
+                              alt={es.catalog.offerPhotoAlt(offer.title, index + 1)}
+                              fill
+                              sizes="56px"
+                              className="object-cover"
+                            />
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </div>
-                <div className="text-right text-sm">
-                  <p>{offer.seller.display_name ?? offer.seller.username}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {[
-                      offer.seller.rating_count > 0
-                        ? es.trust.ratings.summary(Number(offer.seller.rating_avg).toFixed(1), offer.seller.rating_count)
-                        : es.trust.ratings.none,
-                      offer.seller.state,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                </div>
-              </Link>
-            </li>
-          ))}
+                <Suspense fallback={<div className="h-9 w-40" aria-hidden />}>
+                  <CardOfferAction item={item} sellerId={offer.sellerId} sellerUsername={seller.username} />
+                </Suspense>
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>

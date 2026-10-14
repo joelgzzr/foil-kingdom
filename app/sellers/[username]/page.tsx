@@ -5,7 +5,6 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 import CollectionFilters from "@/components/collection/CollectionFilters";
-import { CollectionSelectionProvider } from "@/components/collection/CollectionSelection";
 import CollectionTile from "@/components/collection/CollectionTile";
 import ShareCollectionButton from "@/components/collection/ShareCollectionButton";
 import WishlistMatchesSection from "@/components/collection/WishlistMatchesSection";
@@ -17,6 +16,7 @@ import CardCarousel from "@/components/ui/card-carousel";
 import { getCurrentUser } from "@/lib/auth-guard";
 import { avatarInitials } from "@/lib/avatar";
 import { getFeaturedListings, getSellerCollectionStats, searchSellerCollection } from "@/lib/data/listings";
+import { getOpenConversationLinks } from "@/lib/data/messages";
 import { getSellerProfile } from "@/lib/data/trust";
 import { es } from "@/lib/i18n/es";
 import { collectionHref, hasActiveCollectionFilters, parseCollectionFilters } from "@/lib/schemas/collection";
@@ -61,11 +61,11 @@ async function SellerProfile({ params, searchParams }: { params: Props["params"]
     searchSellerCollection(profile.id, filters),
   ]);
   const isOwner = viewer?.id === profile.id;
+  const conversationLinks = viewer && !isOwner ? await getOpenConversationLinks(viewer.id) : {};
   const location = [profile.city, profile.state].filter(Boolean).join(", ");
   const name = profile.display_name ?? profile.username;
 
   return (
-    <CollectionSelectionProvider sellerUsername={profile.username} signedIn={Boolean(viewer)}>
     <div className="grid gap-8">
       <header className="overflow-hidden rounded-2xl border bg-card">
         <div className="h-28 bg-linear-to-br from-primary/30 via-primary/10 to-muted sm:h-36" aria-hidden />
@@ -139,7 +139,13 @@ async function SellerProfile({ params, searchParams }: { params: Props["params"]
           {featured.length > 0 ? (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
               {featured.map((listing, index) => (
-                <CollectionTile key={listing.id} listing={listing} selectable={!isOwner} priority={index < 5} />
+                <CollectionTile
+                  key={listing.id}
+                  listing={listing}
+                  selectable={!isOwner}
+                  conversationId={conversationLinks[listing.id]}
+                  priority={index < 5}
+                />
               ))}
             </div>
           ) : (
@@ -167,7 +173,7 @@ async function SellerProfile({ params, searchParams }: { params: Props["params"]
             </h2>
             <p className="text-sm text-muted-foreground">
               {es.collection.results(results.total)}
-              {isOwner ? "" : ` · ${es.collection.selectHint}`}
+              {isOwner ? "" : ` · ${es.collection.cartHint}`}
             </p>
           </div>
           <CollectionFilters basePath={basePath} filters={filters} />
@@ -179,7 +185,7 @@ async function SellerProfile({ params, searchParams }: { params: Props["params"]
         ) : (
           <CardCarousel label={es.collection.forSale}>
             {results.listings.map((listing) => (
-              <CollectionTile key={listing.id} listing={listing} selectable={!isOwner} />
+              <CollectionTile key={listing.id} listing={listing} selectable={!isOwner} conversationId={conversationLinks[listing.id]} />
             ))}
           </CardCarousel>
         )}
@@ -218,7 +224,6 @@ async function SellerProfile({ params, searchParams }: { params: Props["params"]
         )}
       </section>
     </div>
-    </CollectionSelectionProvider>
   );
 }
 

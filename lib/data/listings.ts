@@ -21,10 +21,10 @@ type PhotoRow = { storage_path: string; position: number };
 const firstPhoto = (photos: PhotoRow[]) => [...photos].sort((a, b) => a.position - b.position)[0];
 
 const LISTING_TILE_COLUMNS = `
-  id, kind, title, price_cents, accepts_offers, published_at,
+  id, kind, title, price_cents, published_at,
   profiles!inner(username, state, city),
   listing_photos(storage_path, position),
-  listing_items(condition, card_prints(image_path))
+  listing_items(condition, quantity, card_prints(image_path, slug))
 `;
 
 export type PrintListingStats = { minPriceCents: number; totalCopies: number; sellerCount: number };
@@ -72,9 +72,10 @@ export async function getPrintListings(printId: string, filters: CardOfferFilter
     .from("listing_items")
     .select(
       `id, condition, language, finish, quantity,
-       listings!inner(id, price_cents, accepts_offers, description, published_at,
-         profiles!inner(username, display_name, state, rating_avg, rating_count),
-         listing_photos(id))`,
+       card_prints(slug, image_path),
+       listings!inner(id, seller_id, title, price_cents, published_at,
+         profiles!inner(username, display_name, avatar_url, state, city, rating_avg, rating_count),
+         listing_photos(storage_path, position))`,
     )
     .eq("print_id", printId)
     .gt("quantity", 0)
@@ -89,19 +90,24 @@ export async function getPrintListings(printId: string, filters: CardOfferFilter
   if (error) throw new Error("Failed to load card listings");
 
   return data
-    .map((row) => ({
-      listingId: row.listings.id,
-      priceCents: row.listings.price_cents,
-      acceptsOffers: row.listings.accepts_offers,
-      note: row.listings.description,
-      publishedAt: row.listings.published_at,
-      hasPhotos: row.listings.listing_photos.length > 0,
-      condition: row.condition,
-      language: row.language,
-      finish: row.finish,
-      stock: row.quantity,
-      seller: row.listings.profiles,
-    }))
+    .map((row) => {
+      const photos = [...row.listings.listing_photos].sort((a, b) => a.position - b.position);
+      return {
+        listingId: row.listings.id,
+        sellerId: row.listings.seller_id,
+        title: row.listings.title,
+        priceCents: row.listings.price_cents,
+        publishedAt: row.listings.published_at,
+        photoUrls: photos.map((photo) => listingPhotoUrl(photo.storage_path)),
+        cardImageUrl: cardImageUrl(row.card_prints?.image_path ?? null),
+        printSlug: row.card_prints?.slug ?? null,
+        condition: row.condition,
+        language: row.language,
+        finish: row.finish,
+        stock: row.quantity,
+        seller: row.listings.profiles,
+      };
+    })
     .sort((a, b) => a.priceCents - b.priceCents);
 }
 
@@ -112,10 +118,9 @@ type TileRow = {
   kind: "single" | "lot" | "sealed";
   title: string;
   price_cents: number;
-  accepts_offers: boolean;
   profiles: { username: string; state: string | null; city: string | null };
   listing_photos: PhotoRow[];
-  listing_items: { condition: string; card_prints: { image_path: string | null } | null }[];
+  listing_items: { condition: string; quantity: number; card_prints: { image_path: string | null; slug: string } | null }[];
 };
 
 function toListingTile(row: TileRow) {
@@ -126,10 +131,11 @@ function toListingTile(row: TileRow) {
     kind: row.kind,
     title: row.title,
     priceCents: row.price_cents,
-    acceptsOffers: row.accepts_offers,
     sellerUsername: row.profiles.username,
     sellerState: row.profiles.state,
     condition: row.listing_items[0]?.condition ?? "nm",
+    stock: row.kind === "single" ? (row.listing_items[0]?.quantity ?? 0) : 1,
+    printSlug: row.listing_items[0]?.card_prints?.slug ?? null,
     // Seller photos win; singles fall back to the catalog image.
     imageUrl: photo ? listingPhotoUrl(photo.storage_path) : cardImageUrl(cardImage),
   };
@@ -144,6 +150,14 @@ async function loadTiles(ids: string[]) {
   if (error) throw new Error("Failed to load listing tiles");
   const byId = new Map(data.map((row) => [row.id, toListingTile(row)]));
   return ids.flatMap((id) => byId.get(id) ?? []);
+}
+
+// Active listings among the given ids (RLS hides the rest); used to revalidate carts.
+export async function getListingTilesByIds(ids: string[]) {
+  const valid = [...new Set(ids.filter(isUuid))];
+  // Chunked so the PostgREST URL stays short.
+  const chunks = Array.from({ length: Math.ceil(valid.length / 50) }, (_, index) => valid.slice(index * 50, index * 50 + 50));
+  return (await Promise.all(chunks.map(loadTiles))).flat();
 }
 
 // Strips characters that carry meaning in PostgREST pattern filters.
@@ -301,7 +315,7 @@ export async function getSellerListingsForPrints(sellerId: string, printIds: str
 }
 
 const LISTING_DETAIL_COLUMNS = `
-  id, seller_id, kind, title, description, price_cents, accepts_offers, sealed_type, status, published_at,
+  id, seller_id, kind, title, price_cents, sealed_type, status, published_at,
   card_sets(name),
   profiles!inner(username, display_name, avatar_url, state, city, rating_avg, rating_count, phone_verified),
   listing_photos(id, storage_path, position),
@@ -326,22 +340,6 @@ function toListingDetail<
       }),
     ),
   };
-}
-
-// Only active listings are visible to the anonymous client (RLS).
-export async function getPublicListing(id: string) {
-  "use cache";
-  cacheLife("minutes");
-  cacheTag("listings");
-
-  if (!idSchema.safeParse(id).success) return null;
-  const { data, error } = await createPublicClient()
-    .from("listings")
-    .select(LISTING_DETAIL_COLUMNS)
-    .eq("id", id)
-    .maybeSingle();
-  if (error) throw new Error("Failed to load listing");
-  return data ? toListingDetail(data) : null;
 }
 
 // Request-bound (session cookies): call inside <Suspense>.
@@ -419,4 +417,22 @@ export async function getRecentListings(limit = 8) {
     .limit(limit);
   if (error) throw new Error("Failed to load recent listings");
   return data.map((row) => toListingTile(row));
+}
+
+// Card page path (anchored on the listing) for old /listings/<id> links; only active listings resolve.
+export async function getListingCardPath(id: string) {
+  "use cache";
+  cacheLife("minutes");
+  cacheTag("listings");
+
+  if (!idSchema.safeParse(id).success) return null;
+  const { data, error } = await createPublicClient()
+    .from("listing_items")
+    .select("card_prints(slug)")
+    .eq("listing_id", id)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error("Failed to load listing");
+  const slug = data?.card_prints?.slug;
+  return slug ? `/cards/${encodeURIComponent(slug)}#listing-${id}` : null;
 }

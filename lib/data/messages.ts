@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import { cardImageUrl } from "@/lib/data/catalog";
 import { listingPhotoUrl } from "@/lib/data/listings";
 import { CHAT_MESSAGE_COLUMNS, type ChatMessage } from "@/lib/schemas/message";
@@ -15,7 +17,7 @@ const CONVERSATION_COLUMNS = `
 // Listing columns are null for the buyer once a listing stops being active (RLS), so the item still renders.
 const CONVERSATION_ITEM_COLUMNS = `
   id, listing_id, title, quantity, agreed_price_cents, created_at,
-  listings(id, kind, status, price_cents, accepts_offers,
+  listings(id, kind, status, price_cents,
     listing_photos(storage_path, position),
     listing_items(quantity, card_prints(image_path)))
 `;
@@ -28,10 +30,21 @@ export type ConversationItemView = {
   agreedPriceCents: number | null;
   unitPriceCents: number | null;
   available: boolean;
-  acceptsOffers: boolean;
   stock: number;
   imageUrl: string | null;
 };
+
+// Open cards the user already negotiates as buyer, mapped to their conversation (listing id -> conversation id).
+export const getOpenConversationLinks = cache(async (userId: string): Promise<Record<string, string>> => {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("conversation_items")
+    .select("listing_id, conversation_id, conversations!inner(buyer_id)")
+    .eq("conversations.buyer_id", userId)
+    .is("order_id", null);
+  if (error) throw new Error("Failed to load conversation items");
+  return Object.fromEntries(data.flatMap((row) => (row.listing_id ? [[row.listing_id, row.conversation_id]] : [])));
+});
 
 // All reads here are request-bound (session cookies): call inside <Suspense>.
 export async function getConversations(userId: string) {
@@ -101,7 +114,6 @@ export async function getConversation(id: string, userId: string) {
       agreedPriceCents: row.agreed_price_cents,
       unitPriceCents: listing?.price_cents ?? null,
       available: listing?.status === "active",
-      acceptsOffers: Boolean(listing?.accepts_offers),
       stock: listing?.kind === "single" ? (first?.quantity ?? 0) : 1,
       imageUrl: photo ? listingPhotoUrl(photo.storage_path) : cardImageUrl(first?.card_prints?.image_path ?? null),
     };
