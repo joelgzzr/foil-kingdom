@@ -83,8 +83,12 @@ After making code changes, refresh the graph with `graphify . --update` so it do
   `toast` + `router.refresh()` / `revalidatePath`.
 - Naming: `Entity + Role + Context` (`AddressesSection`, `ProfileForm`). Avoid vague names like `Panel`, `Modal`.
 - Schema changes: `npx supabase migration new <name>`, write SQL (RLS + policies in the same migration), apply
-  with `npx supabase db reset`, then regenerate types with
+  with `npx supabase migration up` (keeps local data), then regenerate types with
   `npx supabase gen types typescript --local > lib/supabase/database.types.ts`.
+- Never wipe the local database (`npx supabase db reset`, dropping schemas, truncating tables) without asking first.
+  It erases the synced catalog and prices, which the scanner depends on. Work around it when possible; if a full
+  wipe is truly needed, ask me and wait for a yes. After an approved wipe, restore with `npm run catalog:variants`
+  then `npm run catalog:prices`.
 - Local stack: Docker + `npx supabase start`. Local phone OTP uses the fixed test number in `config.toml`
   (`5555555555` -> code `123456`). Production needs a real SMS provider.
 
@@ -93,8 +97,8 @@ Run before claiming work complete:
 - `npm run lint`
 - `npx tsc --noEmit` (run `npx next typegen` first if route types are stale)
 - `npm run build`
-For schema/RLS changes also verify with `npx supabase db reset` and a quick supabase-js check that other
-users cannot read or write private rows.
+For schema/RLS changes also run `npm run db:test` (pgTAP runs in a rolled-back transaction, no data lost) and a
+quick supabase-js check that other users cannot read or write private rows.
 
 ## Roadmap
 Phase 1 of the product is contact-only: items are paid off-platform; the app only handles listing, chat and
