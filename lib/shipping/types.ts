@@ -53,6 +53,8 @@ export interface ShippingProvider {
   readonly id: string;
   getRates(route: ShipmentRoute): Promise<ShippingRate[]>;
   createLabel(route: ShipmentRoute & { providerRateId: string; reference: string }): Promise<ShippingLabel>;
+  // Optional: cancels an unused label so the carrier refunds it.
+  voidLabel?(providerShipmentId: string): Promise<void>;
   // Throws WebhookSignatureError on a bad signature; returns null for events we ignore.
   parseWebhook(rawBody: string, headers: Headers): TrackingEvent | null;
 }

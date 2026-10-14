@@ -1,10 +1,12 @@
 import "server-only";
 
+import { getPaymentProvider } from "@/lib/payments";
 import { getShippingProvider } from "@/lib/shipping";
 import type { TrackingEvent } from "@/lib/shipping/types";
 import type { PaymentEvent } from "@/lib/payments/types";
 import { toShippingAddress } from "@/lib/orders/addresses";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -31,7 +33,8 @@ export async function applyPaymentEvent(providerId: string, event: PaymentEvent)
     .eq("provider_payment_id", event.providerPaymentId)
     .maybeSingle();
   if (!payment) return { handled: false as const, reason: "unknown_payment" };
-  if (payment.status !== "pending") return { handled: true as const, reason: "already_processed" };
+  // `expired` payments can still be approved late by the processor; those are refunded below.
+  if (payment.status !== "pending" && payment.status !== "expired") return { handled: true as const, reason: "already_processed" };
 
   if (event.status === "rejected") {
     await admin.from("payments").update({ status: "rejected" }).eq("id", payment.id).eq("status", "pending");
@@ -47,7 +50,7 @@ export async function applyPaymentEvent(providerId: string, event: PaymentEvent)
     .from("payments")
     .update({ status: "approved" })
     .eq("id", payment.id)
-    .eq("status", "pending")
+    .in("status", ["pending", "expired"])
     .select("id");
   if (!approved?.length) return { handled: true as const, reason: "already_processed" };
 
@@ -60,7 +63,8 @@ export async function applyPaymentEvent(providerId: string, event: PaymentEvent)
     .select("id, conversation_id, buyer_id, seller_id, listing_title, selected_quote_id")
     .maybeSingle();
   if (!order) {
-    // Money was taken for an order that can no longer be paid: needs a manual refund.
+    // Money was taken for an order that can no longer be paid: queued for a refund in /admin.
+    await admin.from("payments").update({ refund_needed: true }).eq("id", payment.id);
     console.error("Approved payment for a non-payable order", { paymentId: payment.id, orderId: payment.order_id });
     return { handled: true as const, reason: "order_not_payable" };
   }
@@ -104,6 +108,10 @@ async function purchaseLabel(
 
     await admin.from("orders").update({ status: "label_ready", label_error: null }).eq("id", order.id);
     await notifyOrderParties(admin, order, "label_ready");
+    // Marks the sale as done in the chat; the conversation is free for a new order from here on.
+    await admin
+      .from("messages")
+      .insert({ conversation_id: order.conversation_id, sender_id: order.seller_id, kind: "system", body: "sale_completed" });
   } catch (error) {
     console.error("Label purchase failed", { orderId: order.id, error });
     await admin
@@ -169,4 +177,55 @@ export async function retryLabelPurchase(orderId: string) {
   await purchaseLabel(admin, order);
   const { data: after } = await admin.from("orders").select("status").eq("id", orderId).single();
   return { retried: true as const, succeeded: after?.status === "label_ready" };
+}
+
+// Moderator action: cancels a labelled order. The database change comes first; the label void
+// and refund are best effort and any refund we can't make is queued for a manual one.
+export async function revokeOrder(
+  moderator: Awaited<ReturnType<typeof createClient>>,
+  orderId: string,
+  reason: string,
+) {
+  const admin = createAdminClient();
+  const { data: shipment } = await admin
+    .from("shipments")
+    .select("provider, provider_shipment_id")
+    .eq("order_id", orderId)
+    .maybeSingle();
+
+  const { error } = await moderator.rpc("admin_revoke_order", { p_order_id: orderId, p_reason: reason });
+  if (error) return { revoked: false as const };
+
+  let manualFollowUp = false;
+
+  if (shipment) {
+    try {
+      const provider = getShippingProvider(shipment.provider);
+      if (provider.voidLabel && shipment.provider_shipment_id) await provider.voidLabel(shipment.provider_shipment_id);
+      else manualFollowUp = true;
+    } catch (voidError) {
+      console.error("Label void failed", { orderId, error: voidError });
+      manualFollowUp = true;
+    }
+  }
+
+  const { data: payments } = await admin
+    .from("payments")
+    .select("id, provider, provider_payment_id")
+    .eq("order_id", orderId)
+    .eq("status", "approved");
+  for (const payment of payments ?? []) {
+    try {
+      const provider = getPaymentProvider(payment.provider);
+      if (!provider.refund || !payment.provider_payment_id) throw new Error("Refund not supported");
+      await provider.refund(payment.provider_payment_id);
+      await admin.from("payments").update({ status: "refunded", refund_needed: false }).eq("id", payment.id);
+    } catch (refundError) {
+      console.error("Refund failed", { orderId, paymentId: payment.id, error: refundError });
+      await admin.from("payments").update({ refund_needed: true }).eq("id", payment.id);
+      manualFollowUp = true;
+    }
+  }
+
+  return { revoked: true as const, manualFollowUp };
 }

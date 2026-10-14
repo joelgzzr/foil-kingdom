@@ -8,31 +8,30 @@ import { toast } from "sonner";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { createOrderAction } from "@/lib/actions/orders";
 import type { UserAddressOption } from "@/lib/data/orders";
 import { es } from "@/lib/i18n/es";
+import { formatMXN } from "@/lib/money";
 import { PACKAGE_PRESET_IDS } from "@/lib/orders/packages";
 import { createOrderSchema, type CreateOrderInput } from "@/lib/schemas/order";
 
 type Props = {
   conversationId: string;
   addresses: UserAddressOption[];
-  defaultPrice: number;
+  agreedPriceCents: number;
   // Copies across every card of the bundle, to help pick the package.
   totalCopies: number;
   // Cards that stopped being available block the order until someone removes them.
   hasUnavailableItems: boolean;
 };
 
-export default function CreateOrderForm({ conversationId, addresses, defaultPrice, totalCopies, hasUnavailableItems }: Props) {
+export default function CreateOrderForm({ conversationId, addresses, agreedPriceCents, totalCopies, hasUnavailableItems }: Props) {
   const router = useRouter();
   const copy = es.orders.create;
   const form = useForm<CreateOrderInput>({
     resolver: zodResolver(createOrderSchema),
     defaultValues: {
-      price: defaultPrice,
       packagePreset: "envelope",
       originAddressId: (addresses.find((address) => address.is_default) ?? addresses[0])?.id ?? "",
     },
@@ -67,17 +66,11 @@ export default function CreateOrderForm({ conversationId, addresses, defaultPric
         </div>
       ) : (
         <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-3" noValidate>
-          <Field id="orderPrice" label={copy.price} hint={copy.priceHint} error={errors.price?.message}>
-            <Input
-              id="orderPrice"
-              type="number"
-              inputMode="decimal"
-              min={1}
-              step="0.01"
-              aria-invalid={!!errors.price}
-              {...form.register("price", { valueAsNumber: true })}
-            />
-          </Field>
+          <div className="grid gap-0.5">
+            <p className="text-sm text-muted-foreground">{copy.price}</p>
+            <p className="text-lg font-semibold">{formatMXN(agreedPriceCents)}</p>
+            <p className="text-xs text-muted-foreground">{copy.priceHint}</p>
+          </div>
           <Field id="orderPackage" label={copy.package} hint={copy.packageHint(totalCopies)} error={errors.packagePreset?.message}>
             <NativeSelect id="orderPackage" {...form.register("packagePreset")}>
               {PACKAGE_PRESET_IDS.map((id) => (

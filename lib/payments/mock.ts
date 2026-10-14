@@ -20,6 +20,10 @@ export const mockPaymentProvider: PaymentProvider = {
     return { providerPaymentId: `mock_${paymentId}`, checkoutUrl: `/pay/mock/${paymentId}` };
   },
 
+  async refund() {
+    assertMockAllowed("payment");
+  },
+
   parseWebhook(rawBody, headers) {
     assertMockAllowed("payment");
     verifyHmacSignature(rawBody, headers.get("x-signature"), process.env.PAYMENT_WEBHOOK_SECRET);

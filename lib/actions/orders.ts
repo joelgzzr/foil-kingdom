@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { fail, ok } from "@/lib/action-result";
@@ -8,7 +9,7 @@ import { es } from "@/lib/i18n/es";
 import { toShippingAddress } from "@/lib/orders/addresses";
 import { applyPaymentEvent } from "@/lib/orders/process";
 import { getPaymentProvider } from "@/lib/payments";
-import { createOrderSchema } from "@/lib/schemas/order";
+import { cancelOrderSchema, createOrderSchema } from "@/lib/schemas/order";
 import { getShippingProvider } from "@/lib/shipping";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -16,6 +17,8 @@ import { assertMockAllowed } from "@/lib/webhook-signature";
 
 const idSchema = z.uuid();
 const QUOTE_TTL_MS = 30 * 60 * 1000;
+// SQLSTATE object_in_use, raised while a payment is pending.
+const PAYMENT_IN_FLIGHT = "55006";
 
 export async function createOrderAction(conversationId: unknown, input: unknown) {
   await requireActiveUser();
@@ -27,11 +30,13 @@ export async function createOrderAction(conversationId: unknown, input: unknown)
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("create_order", {
     p_conversation_id: parsedId.data,
-    p_item_price_cents: Math.round(parsed.data.price * 100),
     p_package_preset: parsed.data.packagePreset,
     p_origin_address_id: parsed.data.originAddressId,
   });
   if (error || !data) {
+    if (error?.code === "23514" && error.message.includes("No accepted offer")) {
+      return fail(es.orders.create.noAcceptedOffer, "conflict");
+    }
     if (error?.code === "23514") return fail(es.orders.create.notEnoughStock, "conflict");
     if (error?.code === "23505") return fail(es.orders.create.alreadyOpen, "conflict");
     if (error?.code === "42501") return fail(es.orders.create.sellerOnly, "unauthorized");
@@ -53,7 +58,10 @@ export async function setOrderDestinationAction(orderId: unknown, addressId: unk
     p_order_id: parsedOrder.data,
     p_address_id: parsedAddress.data,
   });
-  if (error) return fail(es.errors.generic, error.code === "P0002" ? "not_found" : "unexpected");
+  if (error) {
+    if (error.code === PAYMENT_IN_FLIGHT) return fail(es.orders.paymentInProgress, "conflict");
+    return fail(es.errors.generic, error.code === "P0002" ? "not_found" : "unexpected");
+  }
 
   // The RPC succeeded, so the caller is the buyer; the admin client only writes the quotes.
   const admin = createAdminClient();
@@ -103,7 +111,7 @@ export async function selectOrderQuoteAction(orderId: unknown, quoteId: unknown)
 
   const supabase = await createClient();
   const { error } = await supabase.rpc("select_order_quote", { p_order_id: parsedOrder.data, p_quote_id: parsedQuote.data });
-  if (error) return fail(error.code === "P0002" ? es.orders.buyer.quoteExpired : es.errors.generic);
+  if (error) return fail(error.code === "P0002" ? es.orders.buyer.quoteExpired : error.code === PAYMENT_IN_FLIGHT ? es.orders.paymentInProgress : es.errors.generic);
   return ok();
 }
 
@@ -126,6 +134,8 @@ export async function startCheckoutAction(orderId: unknown) {
   try {
     const provider = getPaymentProvider();
     const admin = createAdminClient();
+    // Older abandoned attempts stop counting as in flight; late approvals are still handled.
+    await admin.from("payments").update({ status: "expired" }).eq("order_id", order.id).eq("status", "pending");
     const paymentId = crypto.randomUUID();
     const { error: insertError } = await admin
       .from("payments")
@@ -146,14 +156,22 @@ export async function startCheckoutAction(orderId: unknown) {
   }
 }
 
-export async function cancelOrderAction(orderId: unknown) {
+export async function cancelOrderAction(orderId: unknown, input: unknown) {
   await requireActiveUser();
-  const parsed = idSchema.safeParse(orderId);
-  if (!parsed.success) return fail(es.errors.generic, "validation");
+  const parsedId = idSchema.safeParse(orderId);
+  const parsed = cancelOrderSchema.safeParse(input);
+  if (!parsedId.success) return fail(es.errors.generic, "validation");
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? es.errors.generic, "validation");
 
   const supabase = await createClient();
-  const { error } = await supabase.rpc("cancel_order", { p_order_id: parsed.data });
-  if (error) return fail(es.errors.generic);
+  const { error } = await supabase.rpc("cancel_order", { p_order_id: parsedId.data, p_reason: parsed.data.reason });
+  if (error) {
+    if (error.code === PAYMENT_IN_FLIGHT) return fail(es.orders.paymentInProgress, "conflict");
+    if (error.code === "22023") return fail(es.orders.cancelDialog.reasonRequired, "validation");
+    if (error.code === "P0002") return fail(es.orders.notCancellable, "conflict");
+    return fail(es.errors.generic);
+  }
+  revalidatePath("/orders");
   return ok(undefined, es.orders.cancelled);
 }
 

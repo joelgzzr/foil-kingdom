@@ -40,6 +40,10 @@ export const mockShippingProvider: ShippingProvider = {
     };
   },
 
+  async voidLabel() {
+    assertMockAllowed("shipping");
+  },
+
   parseWebhook(rawBody, headers) {
     assertMockAllowed("shipping");
     verifyHmacSignature(rawBody, headers.get("x-signature"), process.env.SHIPPING_WEBHOOK_SECRET);

@@ -14,6 +14,8 @@ export type PaymentEvent = {
 export interface PaymentProvider {
   readonly id: string;
   createCheckout(input: { paymentId: string; orderId: string; amountCents: number; description: string }): Promise<PaymentCheckout>;
+  // Optional: refunds an approved payment in full.
+  refund?(providerPaymentId: string): Promise<void>;
   // Throws WebhookSignatureError on a bad signature; returns null for events we ignore.
   parseWebhook(rawBody: string, headers: Headers): PaymentEvent | null;
 }

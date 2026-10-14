@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Suspense } from "react";
 
 import BuyerShippingFlow from "@/components/orders/BuyerShippingFlow";
@@ -6,7 +7,7 @@ import CreateOrderForm from "@/components/orders/CreateOrderForm";
 import OrderLiveRefresh from "@/components/orders/OrderLiveRefresh";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { getConversationOrder, getUserAddresses } from "@/lib/data/orders";
+import { getActiveConversationOrder, getCompletedConversationOrders, getUserAddresses } from "@/lib/data/orders";
 import { es } from "@/lib/i18n/es";
 import { formatMXN } from "@/lib/money";
 
@@ -14,7 +15,8 @@ type Props = {
   conversationId: string;
   userId: string;
   role: "buyer" | "seller";
-  defaultPriceCents: number;
+  // Accepted offer in centavos; the seller can create the shipment only once there is one.
+  agreedPriceCents: number | null;
   // Seller can start an order only while the conversation has open cards.
   canCreate: boolean;
   totalCopies: number;
@@ -22,19 +24,37 @@ type Props = {
 };
 
 // Reads the session; render inside <Suspense>.
-async function OrderPanelContent({ conversationId, userId, role, defaultPriceCents, canCreate, totalCopies, hasUnavailableItems }: Props) {
-  const order = await getConversationOrder(conversationId);
+async function OrderPanelContent({ conversationId, userId, role, agreedPriceCents, canCreate, totalCopies, hasUnavailableItems }: Props) {
+  const [order, completed] = await Promise.all([getActiveConversationOrder(conversationId), getCompletedConversationOrders(conversationId)]);
 
   if (!order) {
-    if (role !== "seller" || !canCreate) return <OrderLiveRefresh conversationId={conversationId} />;
+    const previous = <PreviousOrders orders={completed} />;
+    if (role !== "seller" || !canCreate) {
+      return (
+        <>
+          <OrderLiveRefresh conversationId={conversationId} />
+          {previous}
+        </>
+      );
+    }
+    if (agreedPriceCents === null) {
+      return (
+        <>
+          <OrderLiveRefresh conversationId={conversationId} />
+          {previous}
+          <p className="rounded-xl border p-4 text-sm text-muted-foreground">{es.orders.create.waitingForOffer}</p>
+        </>
+      );
+    }
     const addresses = await getUserAddresses(userId);
     return (
       <>
         <OrderLiveRefresh conversationId={conversationId} />
+        {previous}
         <CreateOrderForm
           conversationId={conversationId}
           addresses={addresses}
-          defaultPrice={defaultPriceCents / 100}
+          agreedPriceCents={agreedPriceCents}
           totalCopies={totalCopies}
           hasUnavailableItems={hasUnavailableItems}
         />
@@ -110,6 +130,35 @@ async function OrderPanelContent({ conversationId, userId, role, defaultPriceCen
           <CancelOrderButton orderId={order.id} />
         </div>
       ) : null}
+    </section>
+  );
+}
+
+type PreviousOrdersProps = { orders: Awaited<ReturnType<typeof getCompletedConversationOrders>> };
+
+function PreviousOrders({ orders }: PreviousOrdersProps) {
+  if (orders.length === 0) return null;
+  return (
+    <section className="grid gap-2 rounded-xl border p-4" aria-labelledby="previous-orders-title">
+      <h2 id="previous-orders-title" className="text-sm font-medium">
+        {es.orders.history.previous}
+      </h2>
+      <ul className="grid gap-1 text-sm">
+        {orders.map((previous) => (
+          <li key={previous.id} className="flex flex-wrap items-center justify-between gap-2">
+            <span>
+              {new Date(previous.created_at).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" })} ·{" "}
+              {es.orders.history.cards(previous.order_items.reduce((sum, item) => sum + item.quantity, 0))}
+            </span>
+            <span className="flex items-center gap-2">
+              <Badge variant="secondary">{es.orders.status[previous.status]}</Badge>
+              <Link href={`/orders/${previous.id}`} className="underline">
+                {es.orders.history.viewDetail}
+              </Link>
+            </span>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
