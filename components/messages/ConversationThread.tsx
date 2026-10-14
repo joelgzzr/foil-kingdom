@@ -9,8 +9,9 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { NativeSelect } from "@/components/ui/native-select";
 import {
+  counterOfferAction,
+  makeFullPriceOfferAction,
   makeOfferAction,
   markConversationReadAction,
   respondToOfferAction,
@@ -30,22 +31,62 @@ import {
 } from "@/lib/schemas/message";
 import { createClient } from "@/lib/supabase/client";
 
-type OfferItem = { id: string; title: string; available: boolean; acceptsOffers: boolean };
+type OfferItem = { id: string; title: string; available: boolean };
 
 type Props = {
   conversationId: string;
   currentUserId: string;
   role: "buyer" | "seller";
   initialMessages: ChatMessage[];
-  // Open cards of the conversation; an offer targets one of them or the whole bundle.
+  // Open cards of the conversation; offers always cover all of them.
   items: OfferItem[];
+  listTotalCents: number;
 };
 
-function offerBubbleLabel(message: ChatMessage, items: OfferItem[]) {
+function offerBubbleLabel(message: ChatMessage, items: OfferItem[], sentBySeller: boolean) {
   const amount = formatMXN(message.offer_cents ?? 0);
-  if (message.offer_scope === "bundle") return es.messages.offerBundleLabel(amount);
+  if (message.offer_scope === "bundle") {
+    return sentBySeller ? es.messages.counterBundleLabel(amount) : es.messages.offerBundleLabel(amount);
+  }
   const item = items.find((candidate) => candidate.id === message.offer_item_id);
   return item ? es.messages.offerItemLabel(item.title, amount) : es.messages.offerLabel(amount);
+}
+
+function CounterOfferForm({ messageId, onDone }: { messageId: string; onDone: () => void }) {
+  const form = useForm<OfferInput>({ resolver: zodResolver(offerSchema) });
+
+  async function onSubmit(values: OfferInput) {
+    const result = await counterOfferAction(messageId, values);
+    if (!result.ok) {
+      toast.error(result.message);
+      return;
+    }
+    toast.success(result.message);
+    onDone();
+  }
+
+  return (
+    <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-2" noValidate>
+      <Field id={`counter-${messageId}`} label={es.messages.counterAmount} error={form.formState.errors.amount?.message}>
+        <Input
+          id={`counter-${messageId}`}
+          type="number"
+          inputMode="decimal"
+          min={1}
+          step="0.01"
+          {...form.register("amount", { valueAsNumber: true })}
+        />
+      </Field>
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" disabled={form.formState.isSubmitting}>
+          {es.messages.sendCounter}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={onDone}>
+          {es.messages.cancel}
+        </Button>
+      </div>
+    </form>
+  );
 }
 
 const upsertMessage = (messages: ChatMessage[], next: ChatMessage) => {
@@ -56,31 +97,21 @@ const upsertMessage = (messages: ChatMessage[], next: ChatMessage) => {
   return copy;
 };
 
-export default function ConversationThread({ conversationId, currentUserId, role, initialMessages, items }: Props) {
+export default function ConversationThread({ conversationId, currentUserId, role, initialMessages, items, listTotalCents }: Props) {
   const router = useRouter();
   const [messages, setMessages] = useState(initialMessages);
+  const [counteringId, setCounteringId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const offerableItems = items.filter((item) => item.available && item.acceptsOffers);
-  // A bundle offer needs two or more cards and every one of them must accept offers.
-  const canOfferBundle = items.length >= 2 && offerableItems.length === items.length;
-  const canOffer = offerableItems.length > 0;
-  const defaultTarget = canOfferBundle ? "bundle" : (offerableItems[0]?.id ?? "bundle");
+  // The offer covers every open card, so all of them must still be available.
+  const canOffer = items.length > 0 && items.every((item) => item.available);
 
   const markRead = useCallback(() => {
     void markConversationReadAction(conversationId).then(() => router.refresh());
   }, [conversationId, router]);
 
   const messageForm = useForm<MessageInput>({ resolver: zodResolver(messageSchema), defaultValues: { body: "" } });
-  const offerForm = useForm<OfferInput>({ resolver: zodResolver(offerSchema), defaultValues: { target: defaultTarget } });
-  const { getValues: getOfferValues, setValue: setOfferValue } = offerForm;
-
-  // Keep the selected target valid when cards are added or removed.
-  useEffect(() => {
-    const current = getOfferValues("target");
-    const valid = current === "bundle" ? canOfferBundle : offerableItems.some((item) => item.id === current);
-    if (!valid) setOfferValue("target", defaultTarget);
-  }, [canOfferBundle, defaultTarget, getOfferValues, offerableItems, setOfferValue]);
+  const offerForm = useForm<OfferInput>({ resolver: zodResolver(offerSchema) });
 
   useEffect(() => {
     markRead();
@@ -135,12 +166,21 @@ export default function ConversationThread({ conversationId, currentUserId, role
       return;
     }
     toast.success(result.message);
-    offerForm.reset({ target: values.target });
+    offerForm.reset();
   }
 
   async function onRespond(messageId: string, action: "accept" | "reject" | "withdraw") {
     const result = await respondToOfferAction(messageId, action);
     if (!result.ok) toast.error(result.message);
+  }
+
+  async function onFullPrice() {
+    const result = await makeFullPriceOfferAction(conversationId);
+    if (!result.ok) {
+      toast.error(result.message);
+      return;
+    }
+    toast.success(result.message);
   }
 
   async function onWhatsapp() {
@@ -161,8 +201,9 @@ export default function ConversationThread({ conversationId, currentUserId, role
           if (message.kind === "system") {
             const text = es.messages.system[message.body as keyof typeof es.messages.system];
             return (
-              <li key={message.id} className="text-center text-xs text-muted-foreground">
-                {text}
+              <li key={message.id} className="grid gap-0.5 text-center text-xs text-muted-foreground">
+                <span>{text}</span>
+                {message.note ? <span>{es.orders.cancelReason(message.note)}</span> : null}
               </li>
             );
           }
@@ -174,13 +215,17 @@ export default function ConversationThread({ conversationId, currentUserId, role
               >
                 {message.kind === "offer" && message.offer_cents !== null ? (
                   <div className="grid gap-1.5">
-                    <p className="font-medium">{offerBubbleLabel(message, items)}</p>
+                    <p className="font-medium">{offerBubbleLabel(message, items, (role === "seller") === mine)}</p>
                     <p className="text-xs opacity-80">
                       {es.messages.offerStatus[message.offer_status as keyof typeof es.messages.offerStatus]}
                     </p>
                     {message.offer_status === "pending" ? (
-                      <div className="flex gap-2">
-                        {role === "seller" ? (
+                      <div className="flex flex-wrap gap-2">
+                        {mine ? (
+                          <Button size="sm" variant="outline" onClick={() => onRespond(message.id, "withdraw")}>
+                            {es.messages.withdraw}
+                          </Button>
+                        ) : (
                           <>
                             <Button size="sm" variant="secondary" onClick={() => onRespond(message.id, "accept")}>
                               {es.messages.accept}
@@ -188,13 +233,17 @@ export default function ConversationThread({ conversationId, currentUserId, role
                             <Button size="sm" variant="outline" onClick={() => onRespond(message.id, "reject")}>
                               {es.messages.reject}
                             </Button>
+                            {role === "seller" ? (
+                              <Button size="sm" variant="outline" onClick={() => setCounteringId(message.id)}>
+                                {es.messages.counterTitle}
+                              </Button>
+                            ) : null}
                           </>
-                        ) : mine ? (
-                          <Button size="sm" variant="outline" onClick={() => onRespond(message.id, "withdraw")}>
-                            {es.messages.withdraw}
-                          </Button>
-                        ) : null}
+                        )}
                       </div>
+                    ) : null}
+                    {counteringId === message.id && message.offer_status === "pending" ? (
+                      <CounterOfferForm messageId={message.id} onDone={() => setCounteringId(null)} />
                     ) : null}
                   </div>
                 ) : (
@@ -226,18 +275,6 @@ export default function ConversationThread({ conversationId, currentUserId, role
       {role === "buyer" && canOffer ? (
         <form onSubmit={offerForm.handleSubmit(onOffer)} className="grid gap-2 rounded-xl border p-3 sm:flex sm:items-end" noValidate>
           <div className="sm:flex-1">
-            <Field id="offerTarget" label={es.messages.offerTarget} error={offerForm.formState.errors.target?.message}>
-              <NativeSelect id="offerTarget" {...offerForm.register("target")}>
-                {canOfferBundle ? <option value="bundle">{es.messages.offerTargetBundle(items.length)}</option> : null}
-                {offerableItems.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.title}
-                  </option>
-                ))}
-              </NativeSelect>
-            </Field>
-          </div>
-          <div className="sm:flex-1">
             <Field id="offerAmount" label={es.messages.offerAmount} error={offerForm.formState.errors.amount?.message}>
               <Input
                 id="offerAmount"
@@ -251,6 +288,9 @@ export default function ConversationThread({ conversationId, currentUserId, role
           </div>
           <Button type="submit" variant="outline" disabled={offerForm.formState.isSubmitting}>
             {es.messages.sendOffer}
+          </Button>
+          <Button type="button" onClick={onFullPrice}>
+            {es.messages.offerFullPrice(formatMXN(listTotalCents))}
           </Button>
         </form>
       ) : null}

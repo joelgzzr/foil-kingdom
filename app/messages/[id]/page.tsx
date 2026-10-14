@@ -56,12 +56,14 @@ async function Thread({ params }: { params: PageProps<"/messages/[id]">["params"
     <div className="grid gap-4">
       <header>
         <h1 className="text-xl font-semibold tracking-tight">{conversation.otherName}</h1>
-        <p className="text-sm text-muted-foreground">
-          {es.messages.about}:{" "}
-          <Link href={`/sellers/${conversation.sellerUsername}`} className="underline">
-            {conversation.listingTitle}
-          </Link>
-        </p>
+        {items.length > 0 ? (
+          <p className="text-sm text-muted-foreground">
+            {es.messages.about}:{" "}
+            <Link href={`/sellers/${conversation.sellerUsername}`} className="underline">
+              {conversation.listingTitle}
+            </Link>
+          </p>
+        ) : null}
       </header>
       <ConversationTabs
         chat={
@@ -70,7 +72,7 @@ async function Thread({ params }: { params: PageProps<"/messages/[id]">["params"
               conversationId={conversation.id}
               userId={user.id}
               role={conversation.role}
-              defaultPriceCents={Math.max(conversation.agreedTotalCents, 100)}
+              agreedPriceCents={conversation.hasAgreedBundle ? conversation.agreedTotalCents : null}
               canCreate={items.length > 0}
               totalCopies={totalCopies}
               hasUnavailableItems={items.some((item) => !item.available)}
@@ -87,8 +89,8 @@ async function Thread({ params }: { params: PageProps<"/messages/[id]">["params"
                 id: item.id,
                 title: item.title,
                 available: item.available,
-                acceptsOffers: item.acceptsOffers,
               }))}
+              listTotalCents={conversation.listTotalCents}
             />
           </>
         }
@@ -99,6 +101,7 @@ async function Thread({ params }: { params: PageProps<"/messages/[id]">["params"
               items={items}
               listTotalCents={conversation.listTotalCents}
               agreedTotalCents={conversation.agreedTotalCents}
+              hasAgreedBundle={conversation.hasAgreedBundle}
             />
             {conversation.role === "buyer" ? (
               <Suspense fallback={<div className="h-64 rounded-xl border" aria-hidden />}>

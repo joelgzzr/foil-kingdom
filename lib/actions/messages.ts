@@ -10,6 +10,17 @@ import { createClient } from "@/lib/supabase/server";
 
 const idSchema = z.uuid();
 const listingIdsSchema = z.array(z.uuid()).min(1).max(50);
+const quantitiesSchema = z.array(z.number().int().min(1).max(999)).min(1).max(50);
+
+// Quantities are optional but must line up with the listing ids.
+function parseListingLines(listingIds: unknown, quantities: unknown) {
+  const ids = listingIdsSchema.safeParse(listingIds);
+  if (!ids.success) return null;
+  if (quantities === undefined) return { ids: ids.data, quantities: undefined };
+  const parsed = quantitiesSchema.safeParse(quantities);
+  if (!parsed.success || parsed.data.length !== ids.data.length) return null;
+  return { ids: ids.data, quantities: parsed.data };
+}
 
 // Maps the bundle RPC errors (see 20261014110000_bundle_conversations.sql) to user-facing copy.
 function bundleError(error: { code?: string; message?: string }) {
@@ -22,34 +33,38 @@ function bundleError(error: { code?: string; message?: string }) {
     if (error.message?.includes("yourself")) return fail(es.messages.ownListing, "conflict");
     if (error.message?.includes("Order pending")) return fail(es.messages.orderPending, "conflict");
     if (error.message?.includes("stock")) return fail(es.messages.items.notEnoughStock, "conflict");
-    if (error.message?.includes("does not accept")) return fail(es.messages.offersDisabled, "validation");
+    if (error.message?.includes("Offers unavailable")) return fail(es.messages.offersDisabled, "validation");
     if (error.message?.includes("offer amount")) return fail(es.messages.offerRange, "validation");
   }
   return fail(es.errors.generic);
 }
 
 // Opens (or reuses) the buyer's conversation with the seller and adds the listings to it.
-export async function startConversationAction(listingIds: unknown) {
+export async function startConversationAction(listingIds: unknown, quantities?: unknown) {
   await requireActiveUser();
-  const parsed = listingIdsSchema.safeParse(listingIds);
-  if (!parsed.success) return fail(es.errors.generic, "validation");
+  const lines = parseListingLines(listingIds, quantities);
+  if (!lines) return fail(es.errors.generic, "validation");
 
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("start_conversation", { p_listing_ids: parsed.data });
+  const { data, error } = await supabase.rpc("start_conversation", {
+    p_listing_ids: lines.ids,
+    p_quantities: lines.quantities,
+  });
   if (error || !data) return error ? bundleError(error) : fail(es.errors.generic);
   return ok({ id: data });
 }
 
-export async function addConversationItemsAction(conversationId: unknown, listingIds: unknown) {
+export async function addConversationItemsAction(conversationId: unknown, listingIds: unknown, quantities?: unknown) {
   await requireActiveUser();
   const parsedId = idSchema.safeParse(conversationId);
-  const parsed = listingIdsSchema.safeParse(listingIds);
-  if (!parsedId.success || !parsed.success) return fail(es.errors.generic, "validation");
+  const lines = parseListingLines(listingIds, quantities);
+  if (!parsedId.success || !lines) return fail(es.errors.generic, "validation");
 
   const supabase = await createClient();
   const { error } = await supabase.rpc("add_conversation_items", {
     p_conversation_id: parsedId.data,
-    p_listing_ids: parsed.data,
+    p_listing_ids: lines.ids,
+    p_quantities: lines.quantities,
   });
   return error ? bundleError(error) : ok();
 }
@@ -103,15 +118,39 @@ export async function makeOfferAction(conversationId: unknown, input: unknown) {
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? es.errors.generic, "validation");
 
   const supabase = await createClient();
-  const { target } = parsed.data;
   const { error } = await supabase.rpc("make_offer", {
     p_conversation_id: parsedId.data,
     p_amount_cents: Math.round(parsed.data.amount * 100),
-    p_scope: target === "bundle" ? "bundle" : "item",
-    p_item_id: target === "bundle" ? undefined : target,
   });
   if (error) return bundleError(error);
   return ok(undefined, es.messages.offerSent);
+}
+
+export async function makeFullPriceOfferAction(conversationId: unknown) {
+  await requireActiveUser();
+  const parsedId = idSchema.safeParse(conversationId);
+  if (!parsedId.success) return fail(es.errors.generic, "validation");
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("make_offer", { p_conversation_id: parsedId.data });
+  if (error) return bundleError(error);
+  return ok(undefined, es.messages.offerSent);
+}
+
+export async function counterOfferAction(messageId: unknown, input: unknown) {
+  await requireActiveUser();
+  const parsedId = idSchema.safeParse(messageId);
+  const parsed = offerSchema.safeParse(input);
+  if (!parsedId.success) return fail(es.errors.generic, "validation");
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? es.errors.generic, "validation");
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("counter_offer", {
+    p_message_id: parsedId.data,
+    p_amount_cents: Math.round(parsed.data.amount * 100),
+  });
+  if (error) return error.code === "P0002" ? fail(es.messages.offerNotPending, "conflict") : bundleError(error);
+  return ok(undefined, es.messages.counterSent);
 }
 
 export async function respondToOfferAction(messageId: unknown, action: unknown) {
@@ -122,7 +161,7 @@ export async function respondToOfferAction(messageId: unknown, action: unknown) 
 
   const supabase = await createClient();
   const { error } = await supabase.rpc("respond_to_offer", { p_message_id: parsedId.data, p_action: parsedAction.data });
-  if (error) return fail(es.errors.generic);
+  if (error) return error.code === "P0002" ? fail(es.messages.offerNotPending, "conflict") : bundleError(error);
   return ok();
 }
 

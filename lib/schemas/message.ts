@@ -9,8 +9,6 @@ export const messageSchema = z.object({
 export const offerSchema = z.object({
   // Entered in pesos; converted to centavos on the server.
   amount: z.number(es.errors.required).min(1, es.messages.offerRange).max(1_000_000, es.messages.offerRange),
-  // "bundle" (every card in the conversation) or the id of one conversation item.
-  target: z.union([z.literal("bundle"), z.uuid(es.errors.required)]),
 });
 
 export type MessageInput = z.infer<typeof messageSchema>;
@@ -26,7 +24,8 @@ export type ChatMessage = {
   offer_status: string | null;
   offer_scope: string | null;
   offer_item_id: string | null;
+  note: string | null;
   created_at: string;
 };
 
-export const CHAT_MESSAGE_COLUMNS = "id, conversation_id, sender_id, kind, body, offer_cents, offer_status, offer_scope, offer_item_id, created_at";
+export const CHAT_MESSAGE_COLUMNS = "id, conversation_id, sender_id, kind, body, offer_cents, offer_status, offer_scope, offer_item_id, note, created_at";

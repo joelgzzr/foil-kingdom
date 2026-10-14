@@ -18,10 +18,11 @@ type Props = {
   items: ConversationItemView[];
   listTotalCents: number;
   agreedTotalCents: number;
+  hasAgreedBundle: boolean;
 };
 
 // Cards being negotiated in the conversation. Open items only: once an order is created they move to it.
-export default function ConversationItemsPanel({ role, items, listTotalCents, agreedTotalCents }: Props) {
+export default function ConversationItemsPanel({ role, items, listTotalCents, agreedTotalCents, hasAgreedBundle }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const copy = es.messages.items;
@@ -36,7 +37,7 @@ export default function ConversationItemsPanel({ role, items, listTotalCents, ag
     });
   }
 
-  const hasAgreement = agreedTotalCents !== listTotalCents;
+  const hasAgreement = hasAgreedBundle;
 
   return (
     <section className="grid gap-3 rounded-xl border p-4" aria-labelledby="conversation-items-title">
