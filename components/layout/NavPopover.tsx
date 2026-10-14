@@ -68,7 +68,7 @@ export default function NavPopover({
           <p className="font-medium">{label}</p>
           {kind === "alerts" && items?.some((item) => item.unread) ? <MarkNotificationsReadButton /> : null}
         </div>
-        <div className="max-h-96 overflow-y-auto">
+        <div className="max-h-96 overflow-y-auto overflow-x-hidden">
           {failed ? (
             <p className="px-3 py-6 text-center text-muted-foreground">{es.errors.generic}</p>
           ) : items === null ? (
@@ -76,7 +76,7 @@ export default function NavPopover({
           ) : items.length === 0 ? (
             <p className="px-3 py-6 text-center text-muted-foreground">{empty()}</p>
           ) : (
-            <ul className="grid divide-y">
+            <ul className="grid grid-cols-[minmax(0,1fr)] divide-y">
               {items.map((item) => {
                 const content = (
                   <>
@@ -88,7 +88,7 @@ export default function NavPopover({
                         </span>
                       ))}
                     </span>
-                    {item.meta ? <span className="text-xs text-muted-foreground">{item.meta}</span> : null}
+                    {item.meta ? <span className="shrink-0 text-xs text-muted-foreground">{item.meta}</span> : null}
                     {item.unread ? <span aria-hidden className="size-2 shrink-0 rounded-full bg-primary" /> : null}
                   </>
                 );
